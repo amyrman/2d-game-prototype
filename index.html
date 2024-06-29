@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Platformer Game Prototype - Poo Emoji Collector</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 1px solid black;
+            margin-bottom: 20px;
+        }
+        #controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        button {
+            padding: 5px 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #new-level-btn, #randomize-obstacles-btn {
+            margin-top: 10px;
+            font-size: 18px;
+            padding: 10px 20px;
+        }
+        #message, #counter, #randomize-counter {
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div id="counter">Poo Emojis: 0 / 0</div>
+    <div id="randomize-counter">Obstacles Randomized: 0</div>
+    <div id="controls">
+        <div class="control-group">
+            <label for="gravity-slider">Gravity:</label>
+            <div class="slider-container">
+                <input type="range" id="gravity-slider" min="0" max="2" step="0.1" value="0.6">
+                <span id="gravity-value">0.6</span>
+                <button id="gravity-minus">-</button>
+                <button id="gravity-plus">+</button>
+                <button id="gravity-random">Random</button>
+            </div>
+        </div>
+        <div class="control-group">
+            <label for="momentum-slider">Momentum:</label>
+            <div class="slider-container">
+                <input type="range" id="momentum-slider" min="0" max="1" step="0.01" value="1">
+                <span id="momentum-value">1.00</span>
+                <button id="momentum-minus">-</button>
+                <button id="momentum-plus">+</button>
+                <button id="momentum-random">Random</button>
+            </div>
+        </div>
+        <button id="new-level-btn">New Random Level</button>
+        <button id="randomize-obstacles-btn">Randomize Obstacles</button>
+    </div>
+    <div id="message"></div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gravitySlider = document.getElementById('gravity-slider');
+        const gravityValue = document.getElementById('gravity-value');
+        const momentumSlider = document.getElementById('momentum-slider');
+        const momentumValue = document.getElementById('momentum-value');
+        const messageElement = document.getElementById('message');
+        const counterElement = document.getElementById('counter');
+        const randomizeCounterElement = document.getElementById('randomize-counter');
+
+        const player = {
+            x: 50,
+            y: 350,
+            width: 20,
+            height: 30,
+            xVelocity: 0,
+            yVelocity: 0,
+            speed: 5,
+            jumpForce: 12,
+            color: 'blue',
+            isJumping: false
+        };
+
+        let platforms = [];
+        let pooEmojis = [];
+        let fallingObjects = [];
+        let totalPooEmojis = 0;
+        let collectedPooEmojis = 0;
+        let randomizeCount = 0;
+
+        let gravity = 0.6;
+        let momentum = 1.0;
+
+        function updateGravity(value) {
+            gravity = Math.max(0, Math.min(2, value));
+            gravitySlider.value = gravity;
+            gravityValue.textContent = gravity.toFixed(1);
+        }
+
+        function updateMomentum(value) {
+            momentum = Math.max(0, Math.min(1, value));
+            momentumSlider.value = momentum;
+            momentumValue.textContent = momentum.toFixed(2);
+        }
+
+        gravitySlider.addEventListener('input', () => updateGravity(parseFloat(gravitySlider.value)));
+        momentumSlider.addEventListener('input', () => updateMomentum(parseFloat(momentumSlider.value)));
+
+        document.getElementById('gravity-minus').addEventListener('click', () => updateGravity(gravity - 0.1));
+        document.getElementById('gravity-plus').addEventListener('click', () => updateGravity(gravity + 0.1));
+        document.getElementById('gravity-random').addEventListener('click', () => updateGravity(Math.random() * 2));
+
+        document.getElementById('momentum-minus').addEventListener('click', () => updateMomentum(momentum - 0.01));
+        document.getElementById('momentum-plus').addEventListener('click', () => updateMomentum(momentum + 0.01));
+        document.getElementById('momentum-random').addEventListener('click', () => updateMomentum(Math.random()));
+
+        function generateRandomPlatforms() {
+            const platformCount = Math.floor(Math.random() * 5) + 3;
+            return Array(platformCount).fill().map(() => ({
+                x: Math.random() * (canvas.width - 100),
+                y: Math.random() * (canvas.height - 100),
+                width: Math.random() * 100 + 50,
+                height: 20,
+                color: `rgb(${Math.random()*255},${Math.random()*255},${Math.random()*255})`
+            }));
+        }
+
+        function generateRandomLevel() {
+            platforms = generateRandomPlatforms();
+            pooEmojis = [];
+            fallingObjects = [];
+            messageElement.textContent = '';
+            collectedPooEmojis = 0;
+            randomizeCount = 0;
+
+            // Generate random poo emojis
+            totalPooEmojis = Math.floor(Math.random() * 6) + 1;
+            for (let i = 0; i < totalPooEmojis; i++) {
+                pooEmojis.push({
+                    x: Math.random() * (canvas.width - 20),
+                    y: Math.random() * (canvas.height - 20),
+                    width: 20,
+                    height: 20
+                });
+            }
+
+            // Reset player position
+            player.x = 50;
+            player.y = 350;
+            player.xVelocity = 0;
+            player.yVelocity = 0;
+
+            updateCounter();
+            updateRandomizeCounter();
+        }
+
+        function randomizeObstacles() {
+            platforms = generateRandomPlatforms();
+            fallingObjects = [];
+            messageElement.textContent = '';
+
+            // Reset player position
+            player.x = 50;
+            player.y = 350;
+            player.xVelocity = 0;
+            player.yVelocity = 0;
+
+            randomizeCount++;
+            updateRandomizeCounter();
+        }
+
+        function updateCounter() {
+            counterElement.textContent = `Poo Emojis: ${collectedPooEmojis} / ${totalPooEmojis}`;
+        }
+
+        function updateRandomizeCounter() {
+            randomizeCounterElement.textContent = `Obstacles Randomized: ${randomizeCount}`;
+        }
+
+        function drawRoom() {
+            ctx.fillStyle = '#e0e0e0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawPlatform(platform) {
+            ctx.fillStyle = platform.color;
+            ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+        }
+
+        function drawPlayer() {
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+        }
+
+        function drawPooEmoji(emoji) {
+            ctx.font = '20px Arial';
+            ctx.fillText('💩', emoji.x, emoji.y + emoji.height);
+        }
+
+        function drawFallingObject(obj) {
+            ctx.fillStyle = obj.color;
+            if (obj.shape === 'rectangle') {
+                ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(obj.x, obj.y);
+                ctx.lineTo(obj.x + obj.width, obj.y);
+                ctx.lineTo(obj.x + obj.width / 2, obj.y + obj.height);
+                ctx.closePath();
+                ctx.fill();
+            }
+        }
+
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        function createFallingObject() {
+            const shape = Math.random() < 0.5 ? 'rectangle' : 'triangle';
+            return {
+                x: Math.random() * (canvas.width - 30),
+                y: -30,
+                width: Math.random() * 30 + 20,
+                height: Math.random() * 30 + 20,
+                color: `rgb(${Math.random()*255},${Math.random()*255},${Math.random()*255})`,
+                shape: shape,
+                yVelocity: 0
+            };
+        }
+
+        function update() {
+            drawRoom();
+            platforms.forEach(drawPlatform);
+            pooEmojis.forEach(drawPooEmoji);
+            fallingObjects.forEach(drawFallingObject);
+            drawPlayer();
+
+            player.yVelocity += gravity;
+            player.y += player.yVelocity;
+            player.x += player.xVelocity;
+
+            player.xVelocity *= momentum;
+
+            let onPlatform = false;
+            for (let platform of platforms.concat(fallingObjects)) {
+                if (checkCollision(player, platform)) {
+                    if (player.yVelocity > 0 && player.y + player.height - player.yVelocity <= platform.y) {
+                        player.y = platform.y - player.height;
+                        player.yVelocity = 0;
+                        player.isJumping = false;
+                        onPlatform = true;
+                    } else if (player.yVelocity < 0 && player.y - player.yVelocity >= platform.y + platform.height) {
+                        player.y = platform.y + platform.height;
+                        player.yVelocity = 0;
+                    } else if (player.xVelocity > 0) {
+                        player.x = platform.x - player.width;
+                        player.xVelocity = 0;
+                    } else if (player.xVelocity < 0) {
+                        player.x = platform.x + platform.width;
+                        player.xVelocity = 0;
+                    }
+                }
+            }
+
+            if (player.y + player.height > canvas.height) {
+                player.y = canvas.height - player.height;
+                player.yVelocity = 0;
+                player.isJumping = false;
+                onPlatform = true;
+            }
+            if (player.x < 0) {
+                player.x = 0;
+                player.xVelocity = 0;
+            } else if (player.x + player.width > canvas.width) {
+                player.x = canvas.width - player.width;
+                player.xVelocity = 0;
+            }
+
+            if (onPlatform && Math.abs(player.xVelocity) < 0.1) {
+                player.xVelocity = 0;
+            }
+
+            // Check poo emoji collisions
+            pooEmojis = pooEmojis.filter(emoji => {
+                if (checkCollision(player, emoji)) {
+                    collectedPooEmojis++;
+                    updateCounter();
+                    for (let i = 0; i < Math.floor(Math.random() * 3) + 1; i++) {
+                        fallingObjects.push(createFallingObject());
+                    }
+                    return false;
+                }
+                return true;
+            });
+
+            // Update falling objects
+            fallingObjects.forEach(obj => {
+                obj.yVelocity += gravity;
+                obj.y += obj.yVelocity;
+
+                // Check collisions with platforms and other falling objects
+                for (let platform of platforms.concat(fallingObjects)) {
+                    if (obj !== platform && checkCollision(obj, platform)) {
+                        obj.y = platform.y - obj.height;
+                        obj.yVelocity = 0;
+                        break;
+                    }
+                }
+
+                // Check if object has reached the bottom of the canvas
+                if (obj.y + obj.height > canvas.height) {
+                    obj.y = canvas.height - obj.height;
+                    obj.yVelocity = 0;
+                }
+            });
+
+            // Check win condition
+            if (collectedPooEmojis === totalPooEmojis) {
+                messageElement.textContent = "You collected all the poo emojis! You win!";
+            }
+        }
+
+        function gameLoop() {
+            update();
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowLeft':
+                    player.xVelocity = -player.speed;
+                    break;
+                case 'ArrowRight':
+                    player.xVelocity = player.speed;
+                    break;
+                case 'ArrowUp':
+                case ' ':
+                    if (!player.isJumping) {
+                        player.yVelocity = -player.jumpForce;
+                        player.isJumping = true;
+                    }
+                    break;
+                case 'a':
+                    updateGravity(gravity + 0.1);
+                    break;
+                case 's':
+                    updateGravity(gravity - 0.1);
+                    break;
+                case 'd':
+                    updateMomentum(momentum + 0.01);
+                    break;
+                case 'f':
+                    updateMomentum(momentum - 0.01);
+                    break;
+            }
+        });
+
+        document.getElementById('new-level-btn').addEventListener('click', generateRandomLevel);
+        document.getElementById('randomize-obstacles-btn').addEventListener('click', randomizeObstacles);
+
+        generateRandomLevel();
+        gameLoop();
+    </script>
+</body>
+</html>
