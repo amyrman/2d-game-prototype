@@ -36,12 +36,12 @@
             font-size: 16px;
             cursor: pointer;
         }
-        #new-level-btn, #randomize-obstacles-btn {
+        #new-level-btn, #randomize-obstacles-btn, #start-timed-run-btn {
             margin-top: 10px;
             font-size: 18px;
             padding: 10px 20px;
         }
-        #message, #counter, #randomize-counter {
+        #message, #counter, #randomize-counter, #timer {
             font-size: 24px;
             font-weight: bold;
             margin-top: 10px;
@@ -57,6 +57,7 @@
     </div>
     <div id="counter">Poo Emojis: 0 / 0</div>
     <div id="randomize-counter">Obstacles Randomized: 0</div>
+    <div id="timer">Time: 0.0s</div>
     <div id="controls">
         <div class="control-group">
             <label for="gravity-slider">Gravity:</label>
@@ -80,6 +81,7 @@
         </div>
         <button id="new-level-btn">New Random Level</button>
         <button id="randomize-obstacles-btn">Randomize Obstacles</button>
+        <button id="start-timed-run-btn">Lock in settings and start timed run</button>
     </div>
     <div id="message"></div>
     <script>
@@ -92,6 +94,8 @@
         const messageElement = document.getElementById('message');
         const counterElement = document.getElementById('counter');
         const randomizeCounterElement = document.getElementById('randomize-counter');
+        const timerElement = document.getElementById('timer');
+        const startTimedRunBtn = document.getElementById('start-timed-run-btn');
 
         const player = {
             x: 50,
@@ -115,6 +119,9 @@
 
         let gravity = 0.6;
         let momentum = 1.0;
+        let timer = 0;
+        let isTimerRunning = false;
+        let settingsLocked = false;
 
         function updateGravity(value) {
             gravity = Math.max(0, Math.min(2, value));
@@ -345,46 +352,81 @@
             // Check win condition
             if (collectedPooEmojis === totalPooEmojis) {
                 messageElement.textContent = "You collected all the poo emojis! You win!";
+                isTimerRunning = false; // Stop the timer when the player wins
             }
         }
 
         function gameLoop() {
+            if (isTimerRunning) {
+                timer += 0.1; // Increase timer by 0.1 seconds
+                timerElement.textContent = `Time: ${timer.toFixed(1)}s`;
+            }
             update();
             requestAnimationFrame(gameLoop);
         }
 
         document.addEventListener('keydown', (e) => {
-            switch(e.key) {
-                case 'ArrowLeft':
-                    player.xVelocity = -player.speed;
-                    break;
-                case 'ArrowRight':
-                    player.xVelocity = player.speed;
-                    break;
-                case 'ArrowUp':
-                case ' ':
-                    if (!player.isJumping) {
-                        player.yVelocity = -player.jumpForce;
-                        player.isJumping = true;
-                    }
-                    break;
-                case 'a':
-                    updateGravity(gravity + 0.1);
-                    break;
-                case 's':
-                    updateGravity(gravity - 0.1);
-                    break;
-                case 'd':
-                    updateMomentum(momentum + 0.01);
-                    break;
-                case 'f':
-                    updateMomentum(momentum - 0.01);
-                    break;
+    if (settingsLocked) {
+        switch(e.key) {
+            case 'a':
+            case 's':
+            case 'd':
+            case 'f':
+                return; // Ignore these keys if settings are locked
+        }
+    }
+    
+    switch(e.key) {
+        case 'ArrowLeft':
+            player.xVelocity = -player.speed;
+            break;
+        case 'ArrowRight':
+            player.xVelocity = player.speed;
+            break;
+        case 'ArrowUp':
+        case ' ':
+            if (!player.isJumping) {
+                player.yVelocity = -player.jumpForce;
+                player.isJumping = true;
             }
-        });
+            break;
+        case 'a':
+            updateGravity(gravity + 0.1);
+            break;
+        case 's':
+            updateGravity(gravity - 0.1);
+            break;
+        case 'd':
+            updateMomentum(momentum + 0.01);
+            break;
+        case 'f':
+            updateMomentum(momentum - 0.01);
+            break;
+    }
+});
 
         document.getElementById('new-level-btn').addEventListener('click', generateRandomLevel);
         document.getElementById('randomize-obstacles-btn').addEventListener('click', randomizeObstacles);
+
+        startTimedRunBtn.addEventListener('click', () => {
+            // Disable settings controls
+            gravitySlider.disabled = true;
+            momentumSlider.disabled = true;
+            document.getElementById('gravity-minus').disabled = true;
+            document.getElementById('gravity-plus').disabled = true;
+            document.getElementById('gravity-random').disabled = true;
+            document.getElementById('momentum-minus').disabled = true;
+            document.getElementById('momentum-plus').disabled = true;
+            document.getElementById('momentum-random').disabled = true;
+            startTimedRunBtn.disabled = true;
+
+            // Lock settings
+            settingsLocked = true;
+
+            // Start the timer
+            isTimerRunning = true;
+            timer = 0;
+        });
 
         generateRandomLevel();
         gameLoop();
